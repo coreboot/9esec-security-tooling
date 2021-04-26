@@ -2,6 +2,8 @@ package common
 
 import (
 	"io"
+
+	"github.com/9elements/converged-security-suite/v2/pkg/intel/metadata/manifest/common/pretty"
 )
 
 type StructInfo struct {
@@ -23,7 +25,7 @@ type Structure interface {
 	io.ReaderFrom
 	io.WriterTo
 	TotalSize() uint64
-	//PrettyString(depth uint, withHeader bool, opts ...pretty.Option) string
+	PrettyString(depth uint, withHeader bool, opts ...pretty.Option) string
 }
 
 type Element interface {

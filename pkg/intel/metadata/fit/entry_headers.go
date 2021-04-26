@@ -213,6 +213,8 @@ func (hdr *EntryHeaders) getDataCoordinates(firmware io.ReadSeeker, firmwareLeng
 			return nil, nil, nil, []error{err}
 		}
 		return buf.Bytes(), nil, nil, nil
+	case EntryTypeBootPolicyManifest, EntryTypeKeyManifestRecord:
+		_dataSize = _dataSize >> 4
 	}
 
 	if _dataSize == 0 {
