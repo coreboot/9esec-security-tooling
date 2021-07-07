@@ -1,7 +1,6 @@
 package manifest
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -10,23 +9,6 @@ import (
 
 // Refer to: AMD Platform Security Processor BIOS Architecture Design Guide for AMD Family 17h and Family 19h
 // Processors (NDA), Publication # 55758 Revision: 1.11 Issue Date: August 2020 (1)
-
-// PSPDirectoryTableCookie is a special identifier of PSP Directory table level 1
-const PSPDirectoryTableCookie = 0x50535024 // "$PSP"
-// PSPDirectoryTableLevel2Cookie is a special identifier of PSP Directory table level 2
-const PSPDirectoryTableLevel2Cookie = 0x324C5024 // "$PL2"
-
-// PSPDirectoryTableEntryType is an entry type of PSP Directory table
-type PSPDirectoryTableEntryType uint8
-
-const (
-	// AMDPublicKeyEntry denotes AMD public key entry in PSP Directory table
-	AMDPublicKeyEntry PSPDirectoryTableEntryType = 0x00
-	// PSPBootloaderFirmwareEntry denotes a PSP bootloader firmware entry in PSP Directory table
-	PSPBootloaderFirmwareEntry PSPDirectoryTableEntryType = 0x01
-	// PSPDirectoryTableLevel2Entry denotes an entry that points to PSP Directory table level 2
-	PSPDirectoryTableLevel2Entry PSPDirectoryTableEntryType = 0x40
-)
 
 // PSPDirectoryTableEntry represents a single entry in PSP Directory Table
 // Table 5 in (1)
@@ -41,7 +23,7 @@ type PSPDirectoryTableEntry struct {
 // PSPDirectoryTable represents PSP Directory Table Header with all entries
 // Table 3 in (1)
 type PSPDirectoryTable struct {
-	PSPCookie      uint32
+	PSPCookie      cookie
 	Checksum       uint32
 	TotalEntries   uint32
 	AdditionalInfo uint32
@@ -51,7 +33,7 @@ type PSPDirectoryTable struct {
 func (p PSPDirectoryTable) String() string {
 	var s strings.Builder
 	cookieBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(cookieBytes, p.PSPCookie)
+	binary.LittleEndian.PutUint32(cookieBytes, p.PSPCookie.Uint32())
 	fmt.Fprintf(&s, "PSP Cookie: 0x%x (%s)\n", p.PSPCookie, cookieBytes)
 	fmt.Fprintf(&s, "Checksum: %d\n", p.Checksum)
 	fmt.Fprintf(&s, "Total Entries: %d\n", p.TotalEntries)
@@ -72,34 +54,6 @@ func (p PSPDirectoryTable) String() string {
 			entry.LocationOrValue)
 	}
 	return s.String()
-}
-
-// FindPSPDirectoryTable scans firmware for PSPDirectoryTableCookie
-// and treats remaining bytes as PSPDirectoryTable
-func FindPSPDirectoryTable(firmware Firmware) (*PSPDirectoryTable, uint64, error) {
-	// there is no predefined address, search through the whole memory
-	cookieBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(cookieBytes, PSPDirectoryTableCookie)
-
-	image := firmware.ImageBytes()
-
-	var offset uint64
-	for {
-		idx := bytes.Index(image, cookieBytes)
-		if idx == -1 {
-			break
-		}
-
-		table, err := ParsePSPDirectoryTable(bytes.NewBuffer(image[idx:]))
-		offset += uint64(idx)
-		if err != nil {
-			image = image[idx+len(cookieBytes):]
-			continue
-		}
-		return table, offset, err
-	}
-
-	return nil, 0, fmt.Errorf("EmbeddedFirmwareStructure is not found")
 }
 
 // ParsePSPDirectoryTable converts input bytes into PSPDirectoryTable

@@ -1,7 +1,6 @@
 package manifest
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -10,23 +9,6 @@ import (
 
 // Refer to: AMD Platform Security Processor BIOS Architecture Design Guide for AMD Family 17h and Family 19h
 // Processors (NDA), Publication # 55758 Revision: 1.11 Issue Date: August 2020 (1)
-
-// BIOSDirectoryTableCookie is a special identifier of BIOS Directory table level 1
-const BIOSDirectoryTableCookie = 0x44484224 // $BHD
-// BIOSDirectoryTableLevel2Cookie is a special identifier of BIOS Directory table level 2
-const BIOSDirectoryTableLevel2Cookie = 0x324C4224 // $BL2
-
-// BIOSDirectoryTableEntryType is an entry type of BIOS Directory table
-type BIOSDirectoryTableEntryType uint8
-
-const (
-	// APCBBinaryEntry denotes APCB binary entry in BIOS Directory table
-	APCBBinaryEntry BIOSDirectoryTableEntryType = 0x60
-	// BIOSRTMVolumeEntry denotes BIOS RTM Volume entry in BIOS Directory table
-	BIOSRTMVolumeEntry BIOSDirectoryTableEntryType = 0x62
-	// BIOSDirectoryTableLevel2Entry denotes an entry that points to BIOS Directory table level 2
-	BIOSDirectoryTableLevel2Entry BIOSDirectoryTableEntryType = 0x70
-)
 
 // BIOSDirectoryTableEntry represents a single entry in BIOS Directory Table
 // Table 12 from (1)
@@ -50,7 +32,7 @@ type BIOSDirectoryTableEntry struct {
 // BIOSDirectoryTable represents a BIOS Directory Table Header with all entries
 // Table 11 from (1)
 type BIOSDirectoryTable struct {
-	BIOSCookie   uint32
+	BIOSCookie   cookie
 	Checksum     uint32
 	TotalEntries uint32
 	Reserved     uint32
@@ -61,11 +43,11 @@ type BIOSDirectoryTable struct {
 func (b BIOSDirectoryTable) String() string {
 	var s strings.Builder
 	cookieBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(cookieBytes, b.BIOSCookie)
+	binary.LittleEndian.PutUint32(cookieBytes, b.BIOSCookie.Uint32())
 	fmt.Fprintf(&s, "BIOS Cookie: 0x%x (%s)\n", b.BIOSCookie, cookieBytes)
 	fmt.Fprintf(&s, "Checksum: %d\n", b.Checksum)
 	fmt.Fprintf(&s, "Total Entries: %d\n", b.TotalEntries)
-	fmt.Fprintf(&s, "%-5s | %-10s | %-10s | %-9s | %-8s | %-10s | %-8s | %-10s | %-5s | %-6s | %-13s | %-18s\n",
+	fmt.Fprintf(&s, "%-5s | %-10s | %-10s | %-9s | %-8s | %-10s | %-8s | %-10s | %-5s | %-7s | %-13s | %-18s\n",
 		"Type",
 		"RegionType",
 		"ResetImage",
@@ -80,7 +62,7 @@ func (b BIOSDirectoryTable) String() string {
 		"DestinationAddress")
 	fmt.Fprintf(&s, "%s\n", "----------------------------------------------------------------------------------------------------------------------------------------------------------------")
 	for _, entry := range b.Entries {
-		fmt.Fprintf(&s, "0x%-3x | 0x%-8x | %-10v | %-9v | %-8v | %-10v | 0x%-6x | 0x%-8x | 0x%-3x | %-6d | 0x%-11x | 0x%-18x\n",
+		fmt.Fprintf(&s, "0x%-3x | 0x%-8x | %-10v | %-9v | %-8v | %-10v | 0x%-6x | 0x%-8x | 0x%-3x | %-7d | 0x%-11x | 0x%-18x\n",
 			entry.Type,
 			entry.RegionType,
 			entry.ResetImage,
@@ -95,35 +77,6 @@ func (b BIOSDirectoryTable) String() string {
 			entry.DestinationAddress)
 	}
 	return s.String()
-}
-
-// FindBIOSDirectoryTable scans firmware for BIOSDirectoryTableCookie
-// and treats remaining bytes as BIOSDirectoryTable
-func FindBIOSDirectoryTable(firmware Firmware) (*BIOSDirectoryTable, uint64, error) {
-	// there is no predefined address, search through the whole memory
-	cookieBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(cookieBytes, BIOSDirectoryTableCookie)
-
-	image := firmware.ImageBytes()
-
-	var offset uint64
-	for {
-		idx := bytes.Index(image, cookieBytes)
-		if idx == -1 {
-			break
-		}
-
-		table, err := ParseBIOSDirectoryTable(bytes.NewBuffer(image[idx:]))
-		offset += uint64(idx)
-		if err != nil {
-			image = image[idx+len(cookieBytes):]
-			continue
-		}
-
-		return table, offset, err
-	}
-
-	return nil, 0, fmt.Errorf("EmbeddedFirmwareStructure is not found")
 }
 
 // ParseBIOSDirectoryTable converts input bytes into BIOSDirectoryTable
